@@ -17,10 +17,11 @@ published: false
 
 フォームへ専門用語などの難しい単語を入力しようとするとき、補完があることでユーザー体験向上や、入力ミスの削減できることがあります。
 今回は問題を単純化し、特定の辞書ファイル（専門用語が１行ずつ入っているテキストファイル）から、入力と比較して編集距離が１以内の単語を候補として表示させることを目標にしました。
+このため、
 
 # 実装 #
 
-一番外側のUIは、入力フォーム１つとその下にリストでサジェスト結果を並べる単純な実装です。実際に使用するときには候補を選んだら入力される仕組みもあったほうがよさそうですね。
+一番外側のUIは、入力フォーム１つとその下にリストでサジェスト結果を並べる単純な実装で、以下のようなコードにしました。実際に使用するときには候補を選んだら入力される仕組みもあったほうがよさそうですね。
 
 ``` tsx:入力欄の実装
 const Contents: React.FC = () => {
@@ -42,7 +43,7 @@ const Contents: React.FC = () => {
 ```
 
 ここで`useSaggest()`は、フォームに入力された`word`に対して候補の配列を返すカスタムhookなので、のシグネチャを`function useSuggest(word: string): { suggested: string[] } {}`と決めます。
-
+つまり、
 
 
 `levenshtein`crateの、`levenshtein(a: &str, b: &str) -> usize`を使用しました。
@@ -55,9 +56,7 @@ const Contents: React.FC = () => {
 
 
 
-
-
-``` typescript:サジェストを担うカスタムhook
+``` typescript:useSuggest
 export function useSuggest(word: string): { suggested: string[] } {
   const [suggested, setSuggested] = useState<string[]>([]);
   const wasmRef = useRef<InitOutput | null>(null);
