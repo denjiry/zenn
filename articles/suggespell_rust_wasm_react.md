@@ -21,7 +21,9 @@ published: false
 
 # 実装 #
 
-一番外側のUIは、入力フォーム１つとその下にリストでサジェスト結果を並べる単純な実装で、以下のようなコードにしました。実際に使用するときには候補を選んだら入力される仕組みもあったほうがよさそうですね。
+## UI ##
+
+UIは入力フォーム１つとその下にリストでサジェスト結果を並べる単純な実装で、以下のようなコードにしました。実際に使用するときには候補を選んだら入力される仕組みもあったほうがよさそうですね。
 
 ``` tsx:入力欄の実装
 const Contents: React.FC = () => {
@@ -43,16 +45,19 @@ const Contents: React.FC = () => {
 ```
 
 ここで`useSaggest()`は、フォームに入力された`word`に対して候補の配列を返すカスタムhookなので、のシグネチャを`function useSuggest(word: string): { suggested: string[] } {}`と決めます。
-つまり、
+これによって、Rust上の関数も入力は文字列一つで、返り値は文字列複数であると自然に決まります。
 
 
 `levenshtein`crateの、`levenshtein(a: &str, b: &str) -> usize`を使用しました。
+`levenshtein`は、単純に入力文字列`a`と`b`の編集距離を計算してくれる関数で、以降編集距離の算出はこの関数を使います。
 
 
 
-
-
-
+wasm上で構築したでかいオブジェクトをJavaScript側で利用する方法として
+1. wasmからJavaScript側に[serde-wasm-bindgen](https://docs.rs/serde-wasm-bindgen)を使って送信し、以降はJavaScriptで使いたいように使う
+2. wasmがオブジェクトを持ったままで、JavaScriptには操作をラップした薄い関数を公開する
+の2種類を検討し、2つ目にしました。
+というのも1つ目を使うと、辞書オブジェクト本体はJavaScriptの対応するオブジェクト（RustのHashMap→JavaScriptのMapなど）に変換されて送信されるのですが、any型になってしまうため、Rust側でオブジェクトに実装したメソッドが使用できないからです。
 
 
 
