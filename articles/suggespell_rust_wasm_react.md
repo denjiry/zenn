@@ -1,12 +1,14 @@
 ---
 title: "入力単語のサジェスト処理をRustで書いてReactから呼び出す"
 emoji: "🦀"
-type: "tech" # tech: 技術記事 / idea: アイデア
-topics: [Rust, webassembly, wasmpack, React]
+type: "tech"
+topics: [rust, webassembly, wasmpack, React]
 published: false
 ---
 
 これは[株式会社LabBase テックカレンダー Advent Calendar 2022](https://qiita.com/advent-calendar/2022/labbase)、15日目の記事です。
+株式会社LabBaseでインターンをしているdenjiryです。
+今回は、Rustで書いた入力単語のサジェスト処理を紹介します。
 
 # 概要 #
 
@@ -46,7 +48,7 @@ const Contents: React.FC = () => {
 };
 ```
 
-ここで、`useSaggest()`はフォームに入力された`word`に対して候補の配列を返すカスタムhookとしたいので、`useSaggest()`のシグネチャを`function useSuggest(word: string): { suggested: string[] }`と決めます。これによって、Rust上の関数も入力は文字列一つで、返り値は文字列複数であると自然に決まるので、次は実際にサジェスト処理をするコードを書いていきます。
+ここで、`useSuggest()`はフォームに入力された`word`に対して候補の配列を返すカスタムhookとしたいので、`useSuggest()`のシグネチャを`function useSuggest(word: string): { suggested: string[] }`と決めます。これによって、Rust上の関数も入力は文字列一つで、返り値は文字列複数であると自然に決まるので、次は実際にサジェスト処理をするコードを書いていきます。
 
 ## サジェスト処理のアルゴリズム ##
 
@@ -61,7 +63,7 @@ https://www.anlp.jp/proceedings/annual_meeting/2007/pdf_dir/PB3-3.pdf
 ざっくり説明すると、あらかじめ辞書の各項目の文字列を`許容編集距離+1（つまり今回は2分割）`個の部分文字列に等分割して、それぞれをキーとした連想配列を構築することで、もしクエリとの編集距離が許容値以下だった場合は、連想配列のキーのどちらか片方とは必ず一致することを利用し、編集距離を算出する候補自体の数をうまいこと減らしています。この連想配列と構築する関数、実際に候補を出力する関数をセットで`SubStringDictionary`という構造体に実装した結果、以下のようなコードになりました。
 
 
-``` rust:SubStringDictionaryの定義
+``` rust:substring/src/lib.rs
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -141,20 +143,123 @@ impl SubStringDictionary {
 ## RustのコードのWasmとしてのエクスポート ##
 
 いよいよWasmを使って、普通のReactからRustのコードを利用する話に入ります。
-基本的には、[wasm-packでブラウザ用パッケージを作るチュートリアル](https://rustwasm.github.io/docs/wasm-pack/tutorials/npm-browser-packages/index.html)どおりで問題なくパッケージにまでビルドできます。
+まず、[wasm-packでブラウザ用パッケージを作るチュートリアル](https://rustwasm.github.io/docs/wasm-pack/tutorials/npm-browser-packages/index.html)に沿って設定を行いましょう。
 
 https://rustwasm.github.io/docs/wasm-pack/tutorials/npm-browser-packages/index.html
 
+↑↑のアルゴリズムの実装は`substring`というcrateにわけたので、Wasmとしてエクスポートするcrate（`suggespell`）から`substring`を
 
+``` shell
+suggespell
+  ├── Cargo.toml
+  ├── pkg
+  ├── src
+  │  └── lib.rs
+  ├── substring
+  │  ├── Cargo.toml
+  │  ├── README.md
+  │  └── src
+  │     └── lib.rs
+  └── tests
+     └── web.rs
+```
+のように配置し、`substring::SubStringDictionary`をラップした関数に
 
+``` rust
+use substring::SubStringDictionary;
+use wasm_bindgen::prelude::*;
 
-Wasm上で構築したでかいオブジェクトをJavaScript側で利用する方法として
+#[wasm_bindgen]
+pub fn initialize_sub_string_dictionary(correct_strings: &str, distance: usize) {
+    SubStringDictionary::new(correct_strings, distance)
+    ?????
+}
+
+#[wasm_bindgen]
+pub fn search(query: &str) -> Box<[JsValue]> {
+    let sub_string_dictionary = ?????
+    sub_string_dictionary.search(&query)
+}
+```
+のように、`#[wasm_bindgen]`をつけます。
+しかし、単純な関数ならばこれでよかったのですが、構築した`substring::SubStringDictionary`をだれがどのように持つかは自明ではないため、少し工夫をする必要があります。Wasm上で構築したでかいオブジェクトをJavaScript側で利用する方法として
 1. WasmからJavaScript側に[serde-wasm-bindgen](https://crates.io/crates/serde-wasm-bindgen)を使って送信し、以降はJavaScriptで使いたいように使う
-2. Wasmがオブジェクトを持ったままで、JavaScriptには操作をラップした薄い関数を公開する
+2. Wasmがオブジェクトを持ったままで、JavaScriptには操作をラップした薄い関数を公開する[^1]
 
-の2種類を検討し、2つ目にしました。というのも1つ目を使うと、辞書オブジェクト本体はJavaScriptの対応するオブジェクト（Rustの`HashMap`→JavaScriptの`Map`など）に変換されて送信されるのですが、型はany型になってしまうため、Rust側でオブジェクトに実装したメソッドが使用できないからです。
+の2種類を検討しましたが、今回は2つ目にしました。というのも1つ目を使うと、辞書オブジェクト本体はJavaScriptの対応するオブジェクト（Rustの`HashMap`→JavaScriptの`Map`など）に変換されて送信されるのですが、型はany型になってしまうため、Rust側でオブジェクトに実装したメソッドが使用できないからです。
+Wasmにオブジェクトをもたせるためには`once_cell::sync::OnceCell`を使います。`initialize_sub_string_dictionary()`では、構築した`substring::SubStringDictionary`を
+
+``` rust
+static SUB_STRING_DICTIONARY: OnceCell<SubStringDictionary> = OnceCell::new();
+```
+
+と定義した`SUB_STRING_DICTIONARY`に保存し、`search()`の中で`SUB_STRING_DICTIONARY`から取り出して`sub_string_dictionary.search()`でサジェスト処理を行わせます。
+
+以上プラス[wasm-bindgenで許されている入出力時の型](https://rustwasm.github.io/wasm-bindgen/reference/types.html)を参考によしなに型変換を追加することで、最終的にRust+Wasm側は以下のようなコードになります。
+
+
+``` rust:suggespell/src/lib.rs
+use wasm_bindgen::prelude::*;
+use once_cell::sync::OnceCell;
+use substring::SubStringDictionary;
+
+static SUB_STRING_DICTIONARY: OnceCell<SubStringDictionary> = OnceCell::new();
+
+#[wasm_bindgen]
+pub fn initialize_sub_string_dictionary(correct_strings: &str, distance: usize) {
+    let correct_strings: Vec<&str> = correct_strings.split_whitespace().collect();
+    let correct_strings: Vec<Vec<char>> = correct_strings
+        .iter()
+        .map(|s| s.chars().collect::<Vec<char>>())
+        .collect();
+    // check whether if SUB_STRING_DICTIONARY is already built
+    if !SUB_STRING_DICTIONARY.get().is_none() {
+        return;
+    }
+    SUB_STRING_DICTIONARY
+        .set(SubStringDictionary::new(correct_strings, distance))
+        .expect_throw("fail to set SUB_STRING_DICTIONARY");
+}
+
+#[wasm_bindgen]
+pub fn search(query: &str) -> Box<[JsValue]> {
+    let query = query.chars().collect::<Vec<_>>();
+    let sub_string_dictionary = SUB_STRING_DICTIONARY
+        .get()
+        .expect_throw("the dictionary is not initialized");
+    let suggested_items = sub_string_dictionary.search(&query);
+    let suggested_items: Vec<_> = suggested_items
+        .into_iter()
+        .map(|v| JsValue::from_str(&v))
+        .collect();
+    suggested_items.into_boxed_slice()
+}
+```
 
 ## ReactへのWasmのインポート ##
+
+上のコードをインポートするために、まずReactの方のpackage.jsonにビルド用のコマンドである`"build:wasm"`を追加します。
+
+``` json:package.json
+...
+"scripts": {
+  "build": "yarn build:wasm && tsc && vite build",
+  "build:wasm": "cd suggespell && wasm-pack build --target web --out-dir pkg && cd .. && yarn upgrade suggespell",
+  "dev": "vite",
+  ...
+},
+```
+`wasm-pack build --target web --out-dir pkg`によって`./suggespell/pkg`にyarnでインポート可能なパッケージが用意されます。あとはこれをReact側でインポートすればよいので、普通のローカルにあるパッケージと同様に`"dependencies"`に`suggespell`を追加します。
+
+``` json:package.json
+"dependencies": {
+  ...
+  "react": "^18.0.0",
+  "suggespell": "./suggespell/pkg"
+},
+```
+これでReact側からインポートできるようになったので、最後に`useSuggest()`を実装します。
+
 
 ``` typescript:useSuggestの実装全体
 import { useEffect, useRef, useState } from "react";
@@ -198,9 +303,13 @@ export function useSuggest(word: string): { suggested: string[] } {
 }
 ```
 
+以上で実装が完了しました。動かしてみたところ、`initialize_sub_string_dictionary()`に概ね6秒かかってしまいますが、`search()`そのものはタイピング時に気にならないくらいには高速に動作しました。参考にしたアルゴリズムがうまく計算を軽くしてくれたと思われます。
+
+# ハマったところ #
+
 ## crate-typeでrlibも指定しないと、tests以下で本体が見えない ##
 
-crate-typeでrlibも指定しないと、tests/以下などの他のディレクトリから参照することができず、以下のようなエラーが出てしまいます。（なおrust-analyzerの定義ジャンプは動いてしまう）
+crate-typeでrlibも指定しないと、tests/以下などの他のディレクトリから参照することができず、`wasm-pack test --headless --firefox`でテストを走らせると以下のようなエラーが出てしまいます。（なおrust-analyzerの定義ジャンプは動いてしまう）
 
 ```shell
 error[E0432]: unresolved import `suggespell`
@@ -221,15 +330,17 @@ crate-type = ["cdylib", "rlib"]
 
 # まとめ・所感 #
 
-フォームに入力された単語に対して辞書からサジェストさせる処理をRustで実装し、それをReactから呼び出すコードを書きました。たまたま見つけれたアルゴリズムを実装してうまく高速に動いたのは嬉しかったですね。Wasm上で大きなオブジェクトを作るような記事があまり見つからなかったので、今回取ったような`once_cell`を使う方法以外の方法をご存知だったらぜひ教えていただきたいです。
+フォームに入力された単語に対して辞書からサジェストさせる処理をRustで実装し、それをReactから呼び出すコードを書きました。たまたま発見したアルゴリズムを実装して、フロントエンドで重い処理がうまく高速に動いたのは嬉しかったです。Wasm上で大きなオブジェクトを作るような記事があまり見つからなかったので、今回取ったような`once_cell`を使う方法以外の方法をご存知だったらぜひ教えていただきたいです。
 
 また、やり残しとしては以下を思いつきました。
 
-  * 辞書のビルドをパッケージのビルド時などに逃がすことで、初期化にかかる６秒くらいを削減したい
-  * 今回はやってみたかったのでRustを使ったが、ピュアにTypeScriptで実装しても性能出たかどうかは気になる
+  * 辞書のビルドをパッケージのビルド時などに逃がすことで、`SubStringDictionary`の初期化にかかる６秒くらいを削減したい
+  * 今回はやってみたかったのでRustを使ったが、ピュアにTypeScriptで実装しても性能が出たかどうか
 
 # 参考 #
 
 https://rustwasm.github.io/docs/wasm-pack/introduction.html
 
 https://rustwasm.github.io/docs/wasm-pack/tutorials/npm-browser-packages/template-deep-dive/cargo-toml.html#1-crate-type
+
+[^1]: https://github.com/justinwilaby/spellchecker-wasm はこれを`wasm-bindgen`なしで行っている
