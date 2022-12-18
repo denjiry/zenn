@@ -2,8 +2,8 @@
 title: "入力単語のサジェスト処理をRustで書いてReactから呼び出す"
 emoji: "🦀"
 type: "tech"
-topics: [rust, webassembly, wasmpack, React]
-published: false
+topics: [Rust, WebAssembly, wasmpack, React]
+published: true
 ---
 
 これは[株式会社LabBase テックカレンダー Advent Calendar 2022](https://qiita.com/advent-calendar/2022/labbase)、15日目の記事です。
@@ -18,7 +18,7 @@ published: false
 # 背景 #
 
 フォームへ専門用語などの難しい単語を入力しようとするとき、補完があることでユーザー体験向上や、入力ミスを削減できることがあります。
-今回は問題を単純化し、特定の辞書ファイル（専門用語のみが１行ずつ入っているテキストファイル）から、入力と比較して編集距離が１以内の単語を候補として表示させることにしました。このため、前方一致している単語のサジェストなどは次の機会にゆずることにしました。
+今回は問題を単純化し、特定の辞書ファイル（専門用語のみが1行ずつ入っているテキストファイル）から、入力と比較して編集距離が1以内の単語を候補として表示させることにしました。このため、前方一致している単語のサジェストなどは次の機会にゆずることにしました。
 また十分高速に動くかどうかは、フォーム内でコピペしたりUndoしたりを手動で繰り返してみることで確かめることにしました。
 
 # 実装 #
@@ -140,7 +140,7 @@ impl SubStringDictionary {
 無事にアルゴリズムが出来上がったので、さらにReactから呼べるようにラップしていきます。
 
 
-## RustのコードのWasmとしてのエクスポート ##
+## RustコードのWasmエクスポート ##
 
 いよいよWasmを使って、普通のReactからRustのコードを利用する話に入ります。
 まず、[wasm-packでブラウザ用パッケージを作るチュートリアル](https://rustwasm.github.io/docs/wasm-pack/tutorials/npm-browser-packages/index.html)に沿って設定を行いましょう。
