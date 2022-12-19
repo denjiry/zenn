@@ -30,7 +30,7 @@ https://qiita.com/sotabkw/items/9e78bf1103117b091ee5
 
 UIは入力フォーム１つとその下にリストでサジェスト結果を並べる単純な実装で、以下のようなコードにしました。実際に使用するときには候補を選んだら入力される仕組みもあったほうがよさそうですね。
 
-``` tsx:入力欄の実装
+```tsx:入力欄の実装
 const Contents: React.FC = () => {
   const [text, setText] = useState(""); // 入力フォームの中身
   const { suggested } = useSuggest(text); // サジェストするカスタムhook
@@ -65,7 +65,7 @@ https://www.anlp.jp/proceedings/annual_meeting/2007/pdf_dir/PB3-3.pdf
 ざっくり説明すると、あらかじめ辞書の各項目の文字列を`許容編集距離+1（つまり今回は2分割）`個の部分文字列に等分割して、それぞれをキーとした連想配列を構築することで、もしクエリとの編集距離が許容値以下だった場合は、連想配列のキーのどちらか片方とは必ず一致することを利用し、編集距離を算出する候補自体の数をうまいこと減らしています。この連想配列と構築する関数、実際に候補を出力する関数をセットで`SubStringDictionary`という構造体に実装した結果、以下のようなコードになりました。
 
 
-``` rust:substring/src/lib.rs
+```rust:substring/src/lib.rs
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -151,7 +151,8 @@ https://rustwasm.github.io/docs/wasm-pack/tutorials/npm-browser-packages/index.h
 
 ↑↑のアルゴリズムの実装は`substring`というcrateにわけたので、Wasmとしてエクスポートするcrate（`suggespell`）から`substring`を
 
-``` shell
+```shell:Rust側のディレクトリ構成
+$ exa -T --git-ignore
 suggespell
   ├── Cargo.toml
   ├── pkg
@@ -167,7 +168,7 @@ suggespell
 ```
 のように配置し、`substring::SubStringDictionary`をラップした関数に
 
-``` rust
+```rust
 use substring::SubStringDictionary;
 use wasm_bindgen::prelude::*;
 
@@ -191,7 +192,7 @@ pub fn search(query: &str) -> Box<[JsValue]> {
 の2種類を検討しましたが、今回は2つ目にしました。というのも1つ目を使うと、辞書オブジェクト本体はJavaScriptの対応するオブジェクト（Rustの`HashMap`→JavaScriptの`Map`など）によしなに変換されて送信されるのですが、型はany型になってしまうため、Rust側でオブジェクトに実装したメソッドが使用できないからです。
 Wasmにオブジェクトをもたせるためには`once_cell::sync::OnceCell`を使います。`initialize_sub_string_dictionary()`では、構築した`substring::SubStringDictionary`を
 
-``` rust
+```rust
 static SUB_STRING_DICTIONARY: OnceCell<SubStringDictionary> = OnceCell::new();
 ```
 
@@ -200,7 +201,7 @@ static SUB_STRING_DICTIONARY: OnceCell<SubStringDictionary> = OnceCell::new();
 以上プラス[wasm-bindgenで許されている入出力時の型](https://rustwasm.github.io/wasm-bindgen/reference/types.html)を参考によしなに型変換を追加することで、最終的にRust+Wasm側は以下のようなコードになります。
 
 
-``` rust:suggespell/src/lib.rs
+```rust:suggespell/src/lib.rs
 use wasm_bindgen::prelude::*;
 use once_cell::sync::OnceCell;
 use substring::SubStringDictionary;
@@ -242,7 +243,7 @@ pub fn search(query: &str) -> Box<[JsValue]> {
 
 上のコードをインポートするために、まずReactの方のpackage.jsonにビルド用のコマンドである`"build:wasm"`を追加します。
 
-``` json:package.json
+```json:package.json
 ...
 "scripts": {
   "build": "yarn build:wasm && tsc && vite build",
@@ -253,7 +254,7 @@ pub fn search(query: &str) -> Box<[JsValue]> {
 ```
 `wasm-pack build --target web --out-dir pkg`によって`./suggespell/pkg`にyarnでインポート可能なパッケージが用意されます。あとはこれをReact側でインポートすればよいので、普通のローカルにあるパッケージと同様に`"dependencies"`に`suggespell`を追加します。
 
-``` json:package.json
+```json:package.json
 "dependencies": {
   ...
   "react": "^18.0.0",
@@ -263,7 +264,7 @@ pub fn search(query: &str) -> Box<[JsValue]> {
 これでReact側からインポートできるようになったので、最後に`useSuggest()`を実装します。
 
 
-``` typescript:useSuggestの実装全体
+```typescript:useSuggestの実装全体
 import { useEffect, useRef, useState } from "react";
 import init, {
   InitOutput,
@@ -324,7 +325,7 @@ error[E0432]: unresolved import `suggespell`
 wasm-bindgenを使うと`crate-type = ["cdylib"]`と指定することを求められますが、[wasm-packのチュートリアル](https://rustwasm.github.io/docs/wasm-pack/tutorials/npm-browser-packages/template-deep-dive/cargo-toml.html#1-crate-type)によると、`wasm-pack test`のビルドをするためには`"rlib"`も指定する必要があります。
 
 したがって、以下のように両方指定することで`wasm-pack test --headless --firefox`が動きます。
-``` toml
+```toml
 [lib]
 # rlibもcrate-typeに加えないとtests/以下からインポートできない
 crate-type = ["cdylib", "rlib"]
@@ -336,7 +337,7 @@ crate-type = ["cdylib", "rlib"]
 
 また、やり残しとしては以下を思いつきました。
 
-  * 辞書のビルドをパッケージのビルド時などに逃がすことで、`SubStringDictionary`の初期化にかかる６秒くらいを削減したい
+  * 辞書のビルドを、パッケージのビルド時などに逃がすことで、`SubStringDictionary`の初期化にかかる６秒くらいを削減したい
   * 今回はやってみたかったのでRustを使ったが、ピュアにTypeScriptで実装しても性能が出たかどうか
 
 # 参考 #
