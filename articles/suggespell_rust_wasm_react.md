@@ -6,14 +6,16 @@ topics: [Rust, WebAssembly, wasmpack, React]
 published: true
 ---
 
-これは[株式会社LabBase テックカレンダー Advent Calendar 2022](https://qiita.com/advent-calendar/2022/labbase)、15日目の記事です。
-株式会社LabBaseでインターンをしているdenjiryです。
+これは株式会社LabBase テックカレンダー Advent Calendar 2022、15日目の記事です。
+https://qiita.com/advent-calendar/2022/labbase
+13日目の記事は sotabkw さんによる「Reactとアクセシビリティ(a11y)対応」という記事でした。ぜひご覧ください。
+https://qiita.com/sotabkw/items/9e78bf1103117b091ee5
 今回は、Rustで書いた入力単語のサジェスト処理を紹介します。
 
 # 概要 #
 
 編集距離を元に、フォームに入力された単語と似てる単語を辞書からサジェストさせる処理をRustで実装し、それをwasm-packでパッケージにしてReactから呼び出すコードを書きました。
-辞書の項目数として約12万件（JSTシソーラス）と約100万件（Wikipediaのタイトル）を考慮し、十分高速に毎タイプ入力時にサジェスト結果を表示させることができました。
+辞書の項目数として約12万件（[JSTシソーラス](https://dbarchive.biosciencedbc.jp/jp/mecab/data-1.html)）と約100万件（Wikipediaのタイトル）を考慮し、十分高速に毎タイプ入力時にサジェスト結果を表示させることができました。
 
 # 背景 #
 
