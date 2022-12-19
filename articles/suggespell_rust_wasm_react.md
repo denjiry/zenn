@@ -184,11 +184,11 @@ pub fn search(query: &str) -> Box<[JsValue]> {
 }
 ```
 のように、`#[wasm_bindgen]`をつけます。
-しかし、単純な関数ならばこれでよかったのですが、構築した`substring::SubStringDictionary`をだれがどのように持つかは自明ではないため、少し工夫をする必要があります。Wasm上で構築したでかいオブジェクトをJavaScript側で利用する方法として
+しかし、構築が重いオブジェクトが無いアルゴリズムならばこれでよかったのですが、構築した`substring::SubStringDictionary`をだれがどのように持つかは自明ではないため、少し工夫をする必要があります。Wasm上で構築したでかいオブジェクトをJavaScript側で利用する方法として
 1. WasmからJavaScript側に[serde-wasm-bindgen](https://crates.io/crates/serde-wasm-bindgen)を使って送信し、以降はJavaScriptで使いたいように使う
 2. Wasmがオブジェクトを持ったままで、JavaScriptには操作をラップした薄い関数を公開する[^1]
 
-の2種類を検討しましたが、今回は2つ目にしました。というのも1つ目を使うと、辞書オブジェクト本体はJavaScriptの対応するオブジェクト（Rustの`HashMap`→JavaScriptの`Map`など）に変換されて送信されるのですが、型はany型になってしまうため、Rust側でオブジェクトに実装したメソッドが使用できないからです。
+の2種類を検討しましたが、今回は2つ目にしました。というのも1つ目を使うと、辞書オブジェクト本体はJavaScriptの対応するオブジェクト（Rustの`HashMap`→JavaScriptの`Map`など）によしなに変換されて送信されるのですが、型はany型になってしまうため、Rust側でオブジェクトに実装したメソッドが使用できないからです。
 Wasmにオブジェクトをもたせるためには`once_cell::sync::OnceCell`を使います。`initialize_sub_string_dictionary()`では、構築した`substring::SubStringDictionary`を
 
 ``` rust
