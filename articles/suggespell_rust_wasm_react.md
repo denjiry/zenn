@@ -3,6 +3,7 @@ title: "入力単語のサジェスト処理をRustで書いてReactから呼び
 emoji: "🦀"
 type: "tech"
 topics: [Rust, WebAssembly, wasmpack, React]
+publication_name: labbase
 published: true
 ---
 
